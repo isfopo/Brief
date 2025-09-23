@@ -40,12 +40,15 @@ class MainWindow(QMainWindow):
         valid_files = [path for path in file_paths if self._is_valid_book_file(path)]
         if valid_files:
             self.label.setText(f"Dropped files: {', '.join(Path(f).name for f in valid_files)}")
+        else:
+            self.label.setText("No valid book files found")
         event.acceptProposedAction()
 
     def _is_valid_book_file(self, file_path: str) -> bool:
         """Check if the file is a valid book format (epub or pdf)."""
         path = Path(file_path)
         return path.suffix.lower() in ['.epub', '.pdf']
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
