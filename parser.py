@@ -3,6 +3,7 @@
 from pathlib import Path
 import ebooklib
 from ebooklib import epub
+from pypdf import PdfReader
 
 
 def parse_epub(file_path: str) -> str:
@@ -41,3 +42,43 @@ def parse_epub(file_path: str) -> str:
                 text_content.append(clean_text)
 
     return '\n\n'.join(text_content)
+
+
+def parse_pdf(file_path: str) -> str:
+    """Parse a PDF file and extract text content.
+
+    Args:
+        file_path: Path to the PDF file.
+
+    Returns:
+        Extracted text content from the PDF.
+
+    Raises:
+        ValueError: If the file cannot be parsed as PDF.
+    """
+    path = Path(file_path)
+    if not path.exists():
+        raise ValueError(f"File does not exist: {file_path}")
+
+    try:
+        reader = PdfReader(file_path)
+    except Exception as e:
+        raise ValueError(f"Failed to parse PDF file: {e}")
+
+    text_content = []
+
+    # Extract text from each page
+    for page in reader.pages:
+        text = page.extract_text()
+        if text.strip():
+            text_content.append(text.strip())
+
+    extracted_text = '\n\n'.join(text_content)
+
+    # If no text extracted, it might be a scanned PDF requiring OCR
+    if not extracted_text.strip():
+        # Note: OCR implementation would require additional dependencies like pytesseract
+        # For now, raise an error indicating OCR is needed
+        raise ValueError("No text found in PDF. This appears to be a scanned document requiring OCR, which is not yet implemented.")
+
+    return extracted_text
