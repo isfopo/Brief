@@ -1,5 +1,1 @@
 PyQt6>=6.0.0
-EbookLib>=0.18
-pypdf>=3.0.0
-transformers>=4.0.0
-torch>=2.0.0
