@@ -2,3 +2,4 @@ PyQt6>=6.0.0
 ebooklib
 pypdf
 pyflakes
+pytest

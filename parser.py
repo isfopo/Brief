@@ -17,36 +17,33 @@ def clean_extracted_text(text: str) -> str:
     """
     import re
 
-    # Normalize encoding (assume input is already UTF-8 from parsing)
-    # Remove extra whitespace and normalize line breaks
-    text = re.sub(r'\s+', ' ', text)
-    text = re.sub(r'\n\s*\n', '\n\n', text)
+    # Split into paragraphs (double newlines)
+    paragraphs = re.split(r'\n\s*\n', text)
 
-    # Split into lines for processing
-    lines = text.split('\n')
+    cleaned_paragraphs = []
+    for para in paragraphs:
+        # Clean within paragraph: normalize whitespace
+        para = re.sub(r'\s+', ' ', para.strip())
+        if para:
+            # Split into lines
+            lines = para.split('\n')
+            cleaned_lines = []
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                # Skip lines that are just numbers (page numbers)
+                if re.match(r'^\d+$', line):
+                    continue
+                # Skip very short lines that might be headers/footers (less than 10 chars, not starting with capital)
+                if len(line) < 10 and not line[0].isupper():
+                    continue
+                cleaned_lines.append(line)
+            if cleaned_lines:
+                cleaned_paragraphs.append(' '.join(cleaned_lines))
 
-    # Remove potential headers/footers
-    cleaned_lines = []
-    for line in lines:
-        line = line.strip()
-        # Skip empty lines
-        if not line:
-            continue
-        # Skip lines that are just numbers (page numbers)
-        if re.match(r'^\d+$', line):
-            continue
-        # Skip very short lines that might be headers/footers (less than 10 chars, not starting with capital)
-        if len(line) < 10 and not line[0].isupper():
-            continue
-        cleaned_lines.append(line)
-
-    # Join back
-    cleaned_text = '\n\n'.join(cleaned_lines)
-
-    # Final cleanup
-    cleaned_text = re.sub(r'\n\n+', '\n\n', cleaned_text)
-
-    return cleaned_text.strip()
+    # Join paragraphs with double newlines
+    return '\n\n'.join(cleaned_paragraphs)
 
 
 def parse_epub(file_path: str) -> str:
