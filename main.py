@@ -1,6 +1,9 @@
 import sys
+from pathlib import Path
 
 from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 
 # Constants
 WINDOW_TITLE = "Brief"
@@ -19,8 +22,30 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
         self.setGeometry(WINDOW_X, WINDOW_Y, WINDOW_WIDTH, WINDOW_HEIGHT)
-        label = QLabel(WELCOME_TEXT)
-        self.setCentralWidget(label)
+        self.label = QLabel(WELCOME_TEXT)
+        self.setCentralWidget(self.label)
+        self.setAcceptDrops(True)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        """Handle drag enter events to accept file drops."""
+        if event.mimeData().hasUrls():
+            urls = event.mimeData().urls()
+            if all(self._is_valid_book_file(url.toLocalFile()) for url in urls):
+                event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        """Handle drop events to process dropped files."""
+        urls = event.mimeData().urls()
+        file_paths = [url.toLocalFile() for url in urls]
+        valid_files = [path for path in file_paths if self._is_valid_book_file(path)]
+        if valid_files:
+            self.label.setText(f"Dropped files: {', '.join(Path(f).name for f in valid_files)}")
+        event.acceptProposedAction()
+
+    def _is_valid_book_file(self, file_path: str) -> bool:
+        """Check if the file is a valid book format (epub or pdf)."""
+        path = Path(file_path)
+        return path.suffix.lower() in ['.epub', '.pdf']
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
