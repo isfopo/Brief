@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow
+from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QVBoxLayout, QWidget
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 
@@ -18,12 +18,21 @@ class MainWindow(QMainWindow):
     """Main application window for the Brief book summarization app."""
 
     def __init__(self) -> None:
-        """Initialize the main window with title, geometry, and welcome label."""
+        """Initialize the main window with title, geometry, and welcome list widget."""
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
         self.setGeometry(WINDOW_X, WINDOW_Y, WINDOW_WIDTH, WINDOW_HEIGHT)
-        self.label = QLabel(WELCOME_TEXT)
-        self.setCentralWidget(self.label)
+        
+        # Create central widget and layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
+        
+        # Create list widget for displaying files
+        self.list_widget = QListWidget()
+        self.list_widget.addItem(WELCOME_TEXT)
+        layout.addWidget(self.list_widget)
+        
         self.setAcceptDrops(True)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
@@ -38,10 +47,14 @@ class MainWindow(QMainWindow):
         urls = event.mimeData().urls()
         file_paths = [url.toLocalFile() for url in urls]
         valid_files = [path for path in file_paths if self._is_valid_book_file(path)]
+        
+        self.list_widget.clear()
         if valid_files:
-            self.label.setText(f"Dropped files: {', '.join(Path(f).name for f in valid_files)}")
+            self.list_widget.addItem("Dropped files:")
+            for file in valid_files:
+                self.list_widget.addItem(f"  {Path(file).name}")
         else:
-            self.label.setText("No valid book files found")
+            self.list_widget.addItem("No valid book files found")
         event.acceptProposedAction()
 
     def _is_valid_book_file(self, file_path: str) -> bool:
