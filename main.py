@@ -2,8 +2,9 @@ import sys
 from pathlib import Path
 
 from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QVBoxLayout, QWidget
-from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
+
+from parser import parse_epub
 
 # Constants
 WINDOW_TITLE = "Brief"
@@ -62,6 +63,13 @@ class MainWindow(QMainWindow):
             self.list_widget.addItem("Dropped files:")
             for file in valid_files:
                 self.list_widget.addItem(f"  {Path(file).name}")
+                # Parse EPUB files
+                if Path(file).suffix.lower() == '.epub':
+                    try:
+                        text = parse_epub(file)
+                        self.list_widget.addItem(f"    Parsed {len(text)} characters")
+                    except ValueError as e:
+                        self.list_widget.addItem(f"    Error: {e}")
         else:
             self.list_widget.addItem("No valid book files found")
         
