@@ -34,3 +34,7 @@ dist/
 htmlcov/
 coverage.xml
 *.cover
+
+# Book files
+*.epub
+*.pdf
