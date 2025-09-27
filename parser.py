@@ -35,8 +35,8 @@ def clean_extracted_text(text: str) -> str:
                 # Skip lines that are just numbers (page numbers)
                 if re.match(r'^\d+$', line):
                     continue
-                # Skip very short lines that might be headers/footers (less than 10 chars, not starting with capital)
-                if len(line) < 10 and not line[0].isupper():
+                # Skip very short lines that might be headers/footers (less than 5 chars, not starting with capital)
+                if len(line) < 5 and not line[0].isupper():
                     continue
                 cleaned_lines.append(line)
             if cleaned_lines:
