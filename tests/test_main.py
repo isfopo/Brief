@@ -1,7 +1,5 @@
 """Tests for main module."""
 
-import pytest
-from pathlib import Path
 from unittest.mock import patch
 
 

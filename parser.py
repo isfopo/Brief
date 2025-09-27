@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import ebooklib
+import re
 from ebooklib import epub
 from pypdf import PdfReader
 
@@ -15,7 +16,6 @@ def clean_extracted_text(text: str) -> str:
     Returns:
         Cleaned text.
     """
-    import re
 
     # Split into paragraphs (double newlines)
     paragraphs = re.split(r'\n\s*\n', text)

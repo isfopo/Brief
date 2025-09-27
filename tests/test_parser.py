@@ -1,8 +1,7 @@
 """Tests for parser module."""
 
 import pytest
-from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 from parser import parse_epub, parse_pdf, clean_extracted_text
 
 
@@ -87,7 +86,7 @@ class TestParsePdf:
         with pytest.raises(ValueError, match="File does not exist"):
             parse_pdf("nonexistent.pdf")
 
-    @patch('pypdf.PdfReader')
+    @patch('parser.PdfReader')
     def test_invalid_pdf(self, mock_reader):
         """Test error for invalid PDF."""
         mock_reader.side_effect = Exception("Invalid PDF")
