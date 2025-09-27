@@ -3,8 +3,8 @@ from pathlib import Path
 
 from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
-from drop_zone import DropZone
-from parser import parse_epub, parse_pdf
+from ui.drop_zone import DropZone
+from services.parser import parse_epub, parse_pdf
 
 # Constants
 WINDOW_TITLE = "Brief"
@@ -23,12 +23,12 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
         self.setGeometry(WINDOW_X, WINDOW_Y, WINDOW_WIDTH, WINDOW_HEIGHT)
-        
+
         # Create central widget and layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
-        
+
         # Create list widget for displaying files
         self.list_widget = QListWidget()
         self.list_widget.addItem(WELCOME_TEXT)
