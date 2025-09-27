@@ -1,5 +1,7 @@
 PyQt6>=6.0.0
 ebooklib
 pypdf
+transformers
+torch
 pyflakes
 pytest
