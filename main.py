@@ -2,8 +2,8 @@ import sys
 from pathlib import Path
 
 from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget
-from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 
+from drop_zone import DropZone
 from parser import parse_epub, parse_pdf
 
 # Constants
@@ -39,30 +39,16 @@ class MainWindow(QMainWindow):
         self.button.clicked.connect(self.on_button_click)
         layout.addWidget(self.button)
 
-        self.setAcceptDrops(True)
+        # Create drop zone for file uploads
+        self.drop_zone = DropZone()
+        layout.addWidget(self.drop_zone)
+        self.drop_zone.filesDropped.connect(self.process_files)
 
-    def dragEnterEvent(self, a0: QDragEnterEvent | None) -> None:
-        """Handle drag enter events to accept file drops."""
-        if a0 is None:
-            return
-        mime_data = a0.mimeData()
-        if mime_data and mime_data.hasUrls():
-            urls = mime_data.urls()
-            if any(self._is_valid_book_file(url.toLocalFile()) for url in urls):
-                a0.acceptProposedAction()
-
-    def dropEvent(self, a0: QDropEvent | None) -> None:
-        """Handle drop events to process dropped files."""
-        if a0 is None:
-            return
-        mime_data = a0.mimeData()
-        if mime_data is None:
-            return
-        urls = mime_data.urls()
-        file_paths = [url.toLocalFile() for url in urls]
+    def process_files(self, file_paths: list[str]) -> None:
+        """Process dropped files."""
         valid_files = [path for path in file_paths if self._is_valid_book_file(path)]
         invalid_files = [path for path in file_paths if not self._is_valid_book_file(path)]
-        
+
         self.list_widget.clear()
         if valid_files:
             self.list_widget.addItem("Dropped files:")
@@ -83,12 +69,10 @@ class MainWindow(QMainWindow):
                         self.list_widget.addItem(f"    Error: {e}")
         else:
             self.list_widget.addItem("No valid book files found")
-        
+
         if invalid_files:
             invalid_names = [Path(f).name for f in invalid_files]
             self._show_error_message(f"The following files are not supported: {', '.join(invalid_names)}. Only EPUB and PDF files are accepted.")
-        
-        a0.acceptProposedAction()
 
     def _is_valid_book_file(self, file_path: str) -> bool:
         """Check if the file is a valid book format (epub or pdf)."""
