@@ -2,8 +2,48 @@
 
 from pathlib import Path
 import ebooklib
+import re
 from ebooklib import epub
 from pypdf import PdfReader
+
+
+def clean_extracted_text(text: str) -> str:
+    """Clean extracted text by normalizing encoding, removing headers/footers, and cleaning whitespace.
+
+    Args:
+        text: Raw extracted text.
+
+    Returns:
+        Cleaned text.
+    """
+
+    # Split into paragraphs (double newlines)
+    paragraphs = re.split(r'\n\s*\n', text)
+
+    cleaned_paragraphs = []
+    for para in paragraphs:
+        # Clean within paragraph: normalize whitespace
+        para = re.sub(r'\s+', ' ', para.strip())
+        if para:
+            # Split into lines
+            lines = para.split('\n')
+            cleaned_lines = []
+            for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
+                # Skip lines that are just numbers (page numbers)
+                if re.match(r'^\d+$', line):
+                    continue
+                # Skip very short lines that might be headers/footers (less than 5 chars, not starting with capital)
+                if len(line) < 5 and not line[0].isupper():
+                    continue
+                cleaned_lines.append(line)
+            if cleaned_lines:
+                cleaned_paragraphs.append(' '.join(cleaned_lines))
+
+    # Join paragraphs with double newlines
+    return '\n\n'.join(cleaned_paragraphs)
 
 
 def parse_epub(file_path: str) -> str:
@@ -36,12 +76,13 @@ def parse_epub(file_path: str) -> str:
             content = item.get_content().decode('utf-8')
             # Simple text extraction - remove HTML tags
             import re
-            clean_text = re.sub(r'<[^>]+>', '', content)
-            clean_text = re.sub(r'\s+', ' ', clean_text).strip()
-            if clean_text:
-                text_content.append(clean_text)
+            cleaned_content = re.sub(r'<[^>]+>', '', content)
+            cleaned_content = re.sub(r'\s+', ' ', cleaned_content).strip()
+            if cleaned_content:
+                text_content.append(cleaned_content)
 
-    return '\n\n'.join(text_content)
+    raw_text = '\n\n'.join(text_content)
+    return clean_extracted_text(raw_text)
 
 
 def parse_pdf(file_path: str) -> str:
@@ -81,4 +122,4 @@ def parse_pdf(file_path: str) -> str:
         # For now, raise an error indicating OCR is needed
         raise ValueError("No text found in PDF. This appears to be a scanned document requiring OCR, which is not yet implemented.")
 
-    return extracted_text
+    return clean_extracted_text(extracted_text)
