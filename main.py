@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget
 from PyQt6.QtGui import QDragEnterEvent, QDropEvent
 
 from parser import parse_epub, parse_pdf
@@ -33,7 +33,12 @@ class MainWindow(QMainWindow):
         self.list_widget = QListWidget()
         self.list_widget.addItem(WELCOME_TEXT)
         layout.addWidget(self.list_widget)
-        
+
+        # Create button for event handling demonstration
+        self.button = QPushButton("Click me!")
+        self.button.clicked.connect(self.on_button_click)
+        layout.addWidget(self.button)
+
         self.setAcceptDrops(True)
 
     def dragEnterEvent(self, a0: QDragEnterEvent | None) -> None:
@@ -89,6 +94,10 @@ class MainWindow(QMainWindow):
         """Check if the file is a valid book format (epub or pdf)."""
         path = Path(file_path)
         return path.exists() and path.is_file() and path.suffix.lower() in ['.epub', '.pdf']
+
+    def on_button_click(self) -> None:
+        """Handle button click event."""
+        QMessageBox.information(self, "Info", "Button clicked!")
 
     def _show_error_message(self, message: str) -> None:
         """Show an error message dialog."""
