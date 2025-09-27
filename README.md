@@ -20,8 +20,8 @@ Brief is a desktop application that distills non-fiction books (epub and PDF for
 ## Installation
 
 1. Clone the repo: `git clone https://github.com/isfopo/Brief.git`
-2. Set up virtual environment: `python -m venv env`
-3. Install dependencies: `pip install -r requirements.txt`
+2. Run the setup script: `./setup.sh` (or `bash setup.sh`)
+3. Activate the virtual environment: `source env/bin/activate`
 4. Run: `python main.py`
 
 ## Usage
