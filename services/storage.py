@@ -4,12 +4,19 @@ import hashlib
 import json
 import gzip
 import logging
+import threading
 from pathlib import Path
+from collections import OrderedDict
 from dataclasses import dataclass, asdict
 from typing import Optional
 
 # Storage directory in user's home
 STORAGE_DIR = Path.home() / ".brief" / "summaries"
+
+# Global cache for loaded summaries (LRU with max size)
+MAX_CACHE_SIZE = 100
+_cache = OrderedDict()
+_cache_lock = threading.Lock()
 
 @dataclass
 class SummaryData:
@@ -75,4 +82,42 @@ def load_summary(book_path: str) -> Optional[SummaryData]:
     Returns:
         SummaryData if found, None otherwise
     """
-    pass
+    if not book_path or not isinstance(book_path, str):
+        return None
+
+    with _cache_lock:
+        if book_path in _cache:
+            _cache.move_to_end(book_path)
+            return _cache[book_path]
+
+    file_path = get_file_path(book_path)
+    if not file_path.exists():
+        return None
+
+    try:
+        with gzip.open(file_path, 'rt', encoding='utf-8') as f:
+            json_str = f.read()
+        data_dict = json.loads(json_str)
+        data = SummaryData(**data_dict)
+        with _cache_lock:
+            _cache[book_path] = data
+            _cache.move_to_end(book_path)
+            if len(_cache) > MAX_CACHE_SIZE:
+                _cache.popitem(last=False)
+        return data
+    except (OSError, json.JSONDecodeError, gzip.BadGzipFile, TypeError) as e:
+        logging.error(f"Failed to load summary for {book_path}: {e}")
+        return None
+
+
+def clear_cache(book_path: Optional[str] = None) -> None:
+    """Clear cache entries.
+
+    Args:
+        book_path: Specific path to clear, or None to clear all
+    """
+    with _cache_lock:
+        if book_path:
+            _cache.pop(book_path, None)
+        else:
+            _cache.clear()
