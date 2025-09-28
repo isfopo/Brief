@@ -82,14 +82,15 @@ def chunk_text(text: str, max_tokens: int = 1000, min_tokens: int = 500) -> list
     return chunks
 
 
-def summarize_chunks(chunks: list[str]) -> str:
+def summarize_chunks(chunks: list[str], group_size: int = 5) -> str:
     """Generate hierarchical summary from text chunks.
 
-    Summarizes each chunk individually, then combines and summarizes
-    the chunk summaries for a final cohesive summary.
+    Uses a recursive approach: summarize chunks in groups, then summarize
+    the group summaries, repeating until a single summary is produced.
 
     Args:
         chunks: List of text chunks to summarize
+        group_size: Number of summaries to combine at each level
 
     Returns:
         Hierarchical summary of all chunks
@@ -97,16 +98,37 @@ def summarize_chunks(chunks: list[str]) -> str:
     if not chunks:
         return ""
 
-    # Summarize each chunk
-    chunk_summaries = []
-    for chunk in chunks:
-        summary = summarize_text(chunk)
-        chunk_summaries.append(summary)
+    # Base case: if few chunks, summarize directly
+    if len(chunks) <= group_size:
+        # Summarize each chunk
+        summaries = [summarize_text(chunk) for chunk in chunks if chunk.strip()]
+        if not summaries:
+            return ""
+        combined = " ".join(summaries)
+        return summarize_text(combined)
 
-    # Combine all chunk summaries
-    combined_summaries = " ".join(chunk_summaries)
+    # Recursive case: group chunks and summarize hierarchically
+    summaries = []
+    for i in range(0, len(chunks), group_size):
+        group = chunks[i:i + group_size]
+        group_summaries = [summarize_text(chunk) for chunk in group if chunk.strip()]
+        if group_summaries:
+            combined_group = " ".join(group_summaries)
+            group_summary = summarize_text(combined_group)
+            summaries.append(group_summary)
 
-    # Generate final hierarchical summary
-    final_summary = summarize_text(combined_summaries)
+    # Recurse on the summaries
+    return summarize_chunks(summaries, group_size)
 
-    return final_summary
+
+def summarize_book(text: str) -> str:
+    """Summarize a full book text using chunking and hierarchical summarization.
+
+    Args:
+        text: The full text of the book
+
+    Returns:
+        Hierarchical summary of the book
+    """
+    chunks = chunk_text(text)
+    return summarize_chunks(chunks)
