@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget, QTabWidget, QScrollArea, QLabel, QFrame, QHBoxLayout, QLineEdit, QComboBox, QProgressBar
+from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget, QTabWidget, QScrollArea, QLabel, QHBoxLayout, QLineEdit, QComboBox, QProgressBar
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ui.drop_zone import DropZone
