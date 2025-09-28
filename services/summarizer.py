@@ -80,3 +80,33 @@ def chunk_text(text: str, max_tokens: int = 1000, min_tokens: int = 500) -> list
         start = end
 
     return chunks
+
+
+def summarize_chunks(chunks: list[str]) -> str:
+    """Generate hierarchical summary from text chunks.
+
+    Summarizes each chunk individually, then combines and summarizes
+    the chunk summaries for a final cohesive summary.
+
+    Args:
+        chunks: List of text chunks to summarize
+
+    Returns:
+        Hierarchical summary of all chunks
+    """
+    if not chunks:
+        return ""
+
+    # Summarize each chunk
+    chunk_summaries = []
+    for chunk in chunks:
+        summary = summarize_text(chunk)
+        chunk_summaries.append(summary)
+
+    # Combine all chunk summaries
+    combined_summaries = " ".join(chunk_summaries)
+
+    # Generate final hierarchical summary
+    final_summary = summarize_text(combined_summaries)
+
+    return final_summary
