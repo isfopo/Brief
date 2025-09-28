@@ -2,6 +2,9 @@
 
 from transformers import pipeline
 
+
+MODEL = "facebook/bart-large-cnn"
+
 # Global summarizer instance for reuse
 _summarizer = None
 
@@ -11,7 +14,7 @@ def get_summarizer():
     global _summarizer
     if _summarizer is None:
         try:
-            _summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+            _summarizer = pipeline("summarization", model=MODEL)
         except Exception as e:
             raise RuntimeError(f"Failed to load summarization model: {e}")
     return _summarizer
