@@ -14,6 +14,7 @@ class SummarizationWorker(QThread):
 
     finished = pyqtSignal(str, str)  # file_path, status_message
     error = pyqtSignal(str, str)     # file_path, error_message
+    progress = pyqtSignal(str, str)  # file_path, progress_message
 
     def __init__(self, file_path: str, text: str, metadata: BookMetadata):
         super().__init__()
@@ -23,10 +24,14 @@ class SummarizationWorker(QThread):
 
     def run(self):
         try:
+            self.progress.emit(self.file_path, "Starting summarization...")
+
             # Summarize the text
             summary = summarizer.summarize_book(self.text)
             if not summary:
                 raise ValueError("Summarization failed: empty summary")
+
+            self.progress.emit(self.file_path, "Summarization complete, saving...")
 
             # Save the summary
             metadata_dict = {
@@ -63,6 +68,10 @@ class MainWindow(QMainWindow):
 
         # Keep track of workers
         self.workers = []
+        # Track status per file
+        self.file_status = {}
+        # Track list item row per file
+        self.file_rows = {}
 
         # Create central widget and layout
         central_widget = QWidget()
@@ -90,10 +99,16 @@ class MainWindow(QMainWindow):
         invalid_files = [path for path in file_paths if not self._is_valid_book_file(path)]
 
         self.list_widget.clear()
+        self.file_status.clear()
+        self.file_rows.clear()
         if valid_files:
             self.list_widget.addItem("Processing files:")
             for file in valid_files:
-                self.list_widget.addItem(f"  {Path(file).name}")
+                row = self.list_widget.count()
+                self.list_widget.addItem(f"  {Path(file).name}: Processing...")
+                self.file_rows[file] = row
+                self.file_status[file] = "Processing"
+
                 # Parse book files
                 try:
                     if Path(file).suffix.lower() == '.epub':
@@ -103,19 +118,18 @@ class MainWindow(QMainWindow):
                     else:
                         continue
 
-                    self.list_widget.addItem(f"    Parsed {len(text)} characters")
-                    self.list_widget.addItem(f"    Title: {metadata.title}, Author: {metadata.author}")
-                    self.list_widget.addItem("    Summarizing... (this may take a while)")
+                    self._update_file_status(file, f"Parsed {len(text)} characters - Title: {metadata.title}, Author: {metadata.author}")
 
                     # Start summarization worker
                     worker = SummarizationWorker(file, text, metadata)
                     worker.finished.connect(self.on_summarization_finished)
                     worker.error.connect(self.on_summarization_error)
+                    worker.progress.connect(self.on_summarization_progress)
                     self.workers.append(worker)  # Keep reference
                     worker.start()
 
                 except ValueError as e:
-                    self.list_widget.addItem(f"    Error: {e}")
+                    self._update_file_status(file, f"Error: {e}")
         else:
             self.list_widget.addItem("No valid book files found")
 
@@ -125,11 +139,25 @@ class MainWindow(QMainWindow):
 
     def on_summarization_finished(self, file_path: str, message: str):
         """Handle successful summarization."""
-        self.list_widget.addItem(f"  ✓ {message}")
+        self._update_file_status(file_path, f"✓ {message}")
 
     def on_summarization_error(self, file_path: str, error_message: str):
         """Handle summarization error."""
-        self.list_widget.addItem(f"  ✗ {error_message}")
+        self._update_file_status(file_path, f"✗ {error_message}")
+
+    def on_summarization_progress(self, file_path: str, progress_message: str):
+        """Handle summarization progress updates."""
+        self._update_file_status(file_path, progress_message)
+
+    def _update_file_status(self, file_path: str, status: str):
+        """Update the status for a file in the list widget."""
+        if file_path in self.file_rows:
+            row = self.file_rows[file_path]
+            file_name = Path(file_path).name
+            item = self.list_widget.item(row)
+            if item:
+                item.setText(f"  {file_name}: {status}")
+            self.file_status[file_path] = status
 
     def _is_valid_book_file(self, file_path: str) -> bool:
         """Check if the file is a valid book format (epub or pdf)."""
