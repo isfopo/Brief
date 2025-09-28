@@ -93,21 +93,37 @@ def summarize_text(text: str, max_length: int = 150, min_length: int = 50) -> st
     Returns:
         The summarized text
     """
+    logging.info(f"Summarize: Starting summarization of {len(text)} characters, target length: {min_length}-{max_length}")
+
     if not text.strip():
+        logging.info("Summarize: Empty text provided, returning empty summary")
         return ""
 
+    logging.info("Summarize: Getting tokenizer")
     tokenizer = get_tokenizer()
     tokens = tokenizer.encode(text)
+    logging.info(f"Summarize: Encoded text into {len(tokens)} tokens")
+
     if len(tokens) > MAX_MODEL_TOKENS:
+        logging.warning(f"Summarize: Text too long ({len(tokens)} tokens), truncating to {MAX_MODEL_TOKENS}")
         tokens = tokens[:MAX_MODEL_TOKENS]
         text = tokenizer.decode(tokens)
+        logging.info(f"Summarize: Truncated text now has {len(text)} characters")
 
+    logging.info("Summarize: Getting summarizer model")
     summarizer = get_summarizer()
+
     try:
+        logging.info(f"Summarize: Running model with max_length={max_length}, min_length={min_length}")
+        start_time = __import__('time').time()
         summary = summarizer(text, max_length=max_length, min_length=min_length, do_sample=False)
-        return summary[0]['summary_text']
+        end_time = __import__('time').time()
+        summary_text = summary[0]['summary_text']
+        logging.info(f"Summarize: Model completed in {end_time - start_time:.2f} seconds")
+        logging.info(f"Summarize: Generated summary of {len(summary_text)} characters")
+        return summary_text
     except Exception as e:
-        logging.error(f"Error summarizing text: {e}")
+        logging.error(f"Summarize: Error during summarization: {e}")
         return ""
 
 
@@ -174,31 +190,64 @@ def summarize_chunks(chunks: list[str], group_size: int = 5) -> str:
     Returns:
         Hierarchical summary of all chunks
     """
-    if not chunks:
-        logging.info("No chunks provided")
-        return ""
+    logging.info(f"SummarizeChunks: Starting hierarchical summarization of {len(chunks)} chunks with group_size={group_size}")
 
-    logging.info(f"Summarizing {len(chunks)} chunks")
+    if not chunks:
+        logging.info("SummarizeChunks: No chunks provided, returning empty")
+        return ""
 
     # Base case: if few chunks, summarize directly
     if len(chunks) <= group_size:
-        # Summarize each chunk
-        summaries = [summarize_text(chunk) for chunk in chunks if chunk.strip()]
+        logging.info(f"SummarizeChunks: Base case - {len(chunks)} chunks <= {group_size}, summarizing directly")
+        valid_chunks = [chunk for chunk in chunks if chunk.strip()]
+        logging.info(f"SummarizeChunks: Found {len(valid_chunks)} non-empty chunks")
+
+        summaries = []
+        for i, chunk in enumerate(valid_chunks):
+            logging.info(f"SummarizeChunks: Summarizing chunk {i+1}/{len(valid_chunks)} ({len(chunk)} chars)")
+            summary = summarize_text(chunk)
+            if summary:
+                summaries.append(summary)
+                logging.info(f"SummarizeChunks: Chunk {i+1} summary: {len(summary)} chars")
+
         if not summaries:
+            logging.warning("SummarizeChunks: No valid summaries generated")
             return ""
+
         combined = " ".join(summaries)
-        return summarize_text(combined)
+        logging.info(f"SummarizeChunks: Combining {len(summaries)} summaries ({len(combined)} chars total)")
+        final_summary = summarize_text(combined)
+        logging.info(f"SummarizeChunks: Final summary: {len(final_summary)} chars")
+        return final_summary
 
     # Recursive case: group chunks and summarize hierarchically
+    logging.info(f"SummarizeChunks: Recursive case - processing {len(chunks)} chunks in groups of {group_size}")
     summaries = []
-    for i in range(0, len(chunks), group_size):
-        group = chunks[i:i + group_size]
-        group_summaries = [summarize_text(chunk) for chunk in group if chunk.strip()]
+    total_groups = (len(chunks) + group_size - 1) // group_size  # Ceiling division
+
+    for group_idx in range(0, len(chunks), group_size):
+        group_num = group_idx // group_size + 1
+        group = chunks[group_idx:group_idx + group_size]
+        logging.info(f"SummarizeChunks: Processing group {group_num}/{total_groups} with {len(group)} chunks")
+
+        valid_group_chunks = [chunk for chunk in group if chunk.strip()]
+        logging.info(f"SummarizeChunks: Group {group_num} has {len(valid_group_chunks)} non-empty chunks")
+
+        group_summaries = []
+        for i, chunk in enumerate(valid_group_chunks):
+            logging.info(f"SummarizeChunks: Group {group_num}, summarizing chunk {i+1}/{len(valid_group_chunks)}")
+            summary = summarize_text(chunk)
+            if summary:
+                group_summaries.append(summary)
+
         if group_summaries:
             combined_group = " ".join(group_summaries)
+            logging.info(f"SummarizeChunks: Group {group_num}, combining {len(group_summaries)} summaries ({len(combined_group)} chars)")
             group_summary = summarize_text(combined_group)
             summaries.append(group_summary)
+            logging.info(f"SummarizeChunks: Group {group_num} final summary: {len(group_summary)} chars")
 
+    logging.info(f"SummarizeChunks: Generated {len(summaries)} group summaries, recursing")
     # Recurse on the summaries
     return summarize_chunks(summaries, group_size)
 
@@ -212,6 +261,20 @@ def summarize_book(text: str) -> str:
     Returns:
         Hierarchical summary of the book
     """
+    logging.info(f"SummarizeBook: Starting book summarization of {len(text)} characters")
+
+    start_time = __import__('time').time()
     chunks = chunk_text(text)
-    logging.info("Chunking complete")
-    return summarize_chunks(chunks)
+    chunk_time = __import__('time').time()
+    logging.info(f"SummarizeBook: Chunking completed in {chunk_time - start_time:.2f} seconds, created {len(chunks)} chunks")
+
+    if not chunks:
+        logging.warning("SummarizeBook: No chunks created, returning empty summary")
+        return ""
+
+    summary = summarize_chunks(chunks)
+    end_time = __import__('time').time()
+    logging.info(f"SummarizeBook: Book summarization completed in {end_time - start_time:.2f} seconds")
+    logging.info(f"SummarizeBook: Final summary length: {len(summary)} characters")
+
+    return summary
