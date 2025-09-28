@@ -6,15 +6,16 @@ import gzip
 import logging
 import threading
 from pathlib import Path
+from collections import OrderedDict
 from dataclasses import dataclass, asdict
 from typing import Optional
 
 # Storage directory in user's home
 STORAGE_DIR = Path.home() / ".brief" / "summaries"
 
-# Global cache for loaded summaries (simple LRU with max size)
+# Global cache for loaded summaries (LRU with max size)
 MAX_CACHE_SIZE = 100
-_cache = {}
+_cache = OrderedDict()
 _cache_lock = threading.Lock()
 
 @dataclass
@@ -86,6 +87,7 @@ def load_summary(book_path: str) -> Optional[SummaryData]:
 
     with _cache_lock:
         if book_path in _cache:
+            _cache.move_to_end(book_path)
             return _cache[book_path]
 
     file_path = get_file_path(book_path)
@@ -99,11 +101,9 @@ def load_summary(book_path: str) -> Optional[SummaryData]:
         data = SummaryData(**data_dict)
         with _cache_lock:
             _cache[book_path] = data
-            # Simple LRU: if cache exceeds max size, remove oldest half
+            _cache.move_to_end(book_path)
             if len(_cache) > MAX_CACHE_SIZE:
-                keys_to_remove = list(_cache.keys())[:len(_cache) // 2]
-                for key in keys_to_remove:
-                    _cache.pop(key, None)
+                _cache.popitem(last=False)
         return data
     except (OSError, json.JSONDecodeError, gzip.BadGzipFile, TypeError) as e:
         logging.error(f"Failed to load summary for {book_path}: {e}")

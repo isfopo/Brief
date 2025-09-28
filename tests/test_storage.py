@@ -3,6 +3,7 @@
 import pytest
 import json
 from pathlib import Path
+from collections import OrderedDict
 from unittest.mock import patch, mock_open
 from services.storage import get_file_path, save_summary, load_summary, SummaryData
 
@@ -85,7 +86,7 @@ class TestLoadSummary:
         assert result.title == "Test Book"
         assert result.summary == "Test summary"
 
-    @patch('services.storage._cache', {'/path/to/book.epub': SummaryData(title="Cached", author="Author", path="/path/to/book.epub", timestamp="2023-01-01T00:00:00Z", summary="Cached summary")})
+    @patch('services.storage._cache', OrderedDict([('/path/to/book.epub', SummaryData(title="Cached", author="Author", path="/path/to/book.epub", timestamp="2023-01-01T00:00:00Z", summary="Cached summary"))]))
     def test_load_summary_cache_hit(self):
         """Test returning cached data without file access."""
         result = load_summary("/path/to/book.epub")
@@ -93,7 +94,7 @@ class TestLoadSummary:
         assert result.title == "Cached"
         assert result.summary == "Cached summary"
 
-    @patch('services.storage._cache', {})
+    @patch('services.storage._cache', OrderedDict())
     @patch('services.storage.STORAGE_DIR', Path('/tmp/test_storage'))
     @patch('pathlib.Path.exists', return_value=True)
     @patch('gzip.open', side_effect=OSError("Gzip error"))
@@ -108,7 +109,7 @@ class TestLoadSummary:
         assert load_summary(None) is None  # type: ignore
         assert load_summary(123) is None  # type: ignore
 
-    @patch('services.storage._cache', {})
+    @patch('services.storage._cache', OrderedDict())
     @patch('services.storage.STORAGE_DIR', Path('/tmp/test_storage'))
     @patch('pathlib.Path.exists', return_value=True)
     @patch('gzip.open', new_callable=mock_open, read_data='invalid json')
@@ -117,3 +118,39 @@ class TestLoadSummary:
         """Test handling of invalid JSON."""
         result = load_summary("/path/to/book.epub")
         assert result is None
+
+    @patch('services.storage.MAX_CACHE_SIZE', 2)
+    @patch('services.storage._cache', OrderedDict())
+    @patch('services.storage.STORAGE_DIR', Path('/tmp/test_storage'))
+    @patch('pathlib.Path.exists', return_value=True)
+    @patch('gzip.open', new_callable=mock_open, read_data='{"dummy": "data"}')
+    @patch('json.loads')
+    def test_load_summary_lru_eviction(self, mock_json_loads, mock_gzip_open, mock_exists):
+        """Test LRU eviction when cache exceeds max size."""
+        mock_json_loads.side_effect = [
+            {"title": "Book1", "author": "Author1", "path": "/path/to/book1.epub", "timestamp": "2023-01-01T00:00:00Z", "summary": "Summary1"},
+            {"title": "Book2", "author": "Author2", "path": "/path/to/book2.epub", "timestamp": "2023-01-01T00:00:00Z", "summary": "Summary2"},
+            {"title": "Book3", "author": "Author3", "path": "/path/to/book3.epub", "timestamp": "2023-01-01T00:00:00Z", "summary": "Summary3"},
+            {"title": "Book4", "author": "Author4", "path": "/path/to/book4.epub", "timestamp": "2023-01-01T00:00:00Z", "summary": "Summary4"}
+        ]
+
+        # Load three books, cache size 2, so first should be evicted
+        load_summary("/path/to/book1.epub")
+        load_summary("/path/to/book2.epub")
+        load_summary("/path/to/book3.epub")  # This should evict book1
+
+        # Check that book1 is not in cache, book2 and book3 are
+        from services.storage import _cache
+        assert "/path/to/book1.epub" not in _cache
+        assert "/path/to/book2.epub" in _cache
+        assert "/path/to/book3.epub" in _cache
+
+        # Access book2 to make it most recent
+        load_summary("/path/to/book2.epub")
+
+        # Load another book, should evict book3 (least recent)
+        load_summary("/path/to/book4.epub")
+
+        assert "/path/to/book3.epub" not in _cache
+        assert "/path/to/book2.epub" in _cache
+        assert "/path/to/book4.epub" in _cache
