@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import patch
-from parser import parse_epub, parse_pdf, clean_extracted_text
+from services.parser import parse_epub, parse_pdf, clean_extracted_text
 
 
 class TestCleanExtractedText:
@@ -86,7 +86,7 @@ class TestParsePdf:
         with pytest.raises(ValueError, match="File does not exist"):
             parse_pdf("nonexistent.pdf")
 
-    @patch('parser.PdfReader')
+    @patch('services.parser.PdfReader')
     def test_invalid_pdf(self, mock_reader):
         """Test error for invalid PDF."""
         mock_reader.side_effect = Exception("Invalid PDF")
@@ -94,7 +94,7 @@ class TestParsePdf:
             with pytest.raises(ValueError, match="Failed to parse PDF file"):
                 parse_pdf("test.pdf")
 
-    @patch('parser.PdfReader')
+    @patch('services.parser.PdfReader')
     def test_no_text_pdf(self, mock_reader):
         """Test error for PDF with no extractable text."""
         mock_reader.return_value.pages = []
@@ -102,7 +102,7 @@ class TestParsePdf:
             with pytest.raises(ValueError, match="No text found in PDF"):
                 parse_pdf("test.pdf")
 
-    @patch('parser.PdfReader')
+    @patch('services.parser.PdfReader')
     def test_successful_parsing(self, mock_reader):
         """Test successful PDF parsing."""
         mock_page = type('MockPage', (), {'extract_text': lambda self: 'Hello world'})()
