@@ -2,9 +2,46 @@ import sys
 from pathlib import Path
 
 from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtCore import QThread, pyqtSignal
 
 from ui.drop_zone import DropZone
-from services.parser import parse_epub, parse_pdf
+from services.parser import parse_epub, parse_pdf, BookMetadata
+from services import summarizer, storage
+
+
+class SummarizationWorker(QThread):
+    """Worker thread for summarization and storage."""
+
+    finished = pyqtSignal(str, str)  # file_path, status_message
+    error = pyqtSignal(str, str)     # file_path, error_message
+
+    def __init__(self, file_path: str, text: str, metadata: BookMetadata):
+        super().__init__()
+        self.file_path = file_path
+        self.text = text
+        self.metadata = metadata
+
+    def run(self):
+        try:
+            # Summarize the text
+            summary = summarizer.summarize_book(self.text)
+            if not summary:
+                raise ValueError("Summarization failed: empty summary")
+
+            # Save the summary
+            metadata_dict = {
+                'title': self.metadata.title,
+                'author': self.metadata.author,
+                'path': self.metadata.path,
+                'timestamp': self.metadata.timestamp
+            }
+            storage.save_summary(metadata_dict, summary)
+
+            self.finished.emit(self.file_path, f"Summarized and saved: {self.metadata.title}")
+
+        except Exception as e:
+            self.error.emit(self.file_path, f"Error processing {Path(self.file_path).name}: {str(e)}")
+
 
 # Constants
 WINDOW_TITLE = "Brief"
@@ -23,6 +60,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
         self.setGeometry(WINDOW_X, WINDOW_Y, WINDOW_WIDTH, WINDOW_HEIGHT)
+
+        # Keep track of workers
+        self.workers = []
 
         # Create central widget and layout
         central_widget = QWidget()
@@ -51,28 +91,45 @@ class MainWindow(QMainWindow):
 
         self.list_widget.clear()
         if valid_files:
-            self.list_widget.addItem("Dropped files:")
+            self.list_widget.addItem("Processing files:")
             for file in valid_files:
                 self.list_widget.addItem(f"  {Path(file).name}")
                 # Parse book files
-                if Path(file).suffix.lower() == '.epub':
-                    try:
-                        text = parse_epub(file)
-                        self.list_widget.addItem(f"    Parsed {len(text)} characters")
-                    except ValueError as e:
-                        self.list_widget.addItem(f"    Error: {e}")
-                elif Path(file).suffix.lower() == '.pdf':
-                    try:
-                        text = parse_pdf(file)
-                        self.list_widget.addItem(f"    Parsed {len(text)} characters")
-                    except ValueError as e:
-                        self.list_widget.addItem(f"    Error: {e}")
+                try:
+                    if Path(file).suffix.lower() == '.epub':
+                        text, metadata = parse_epub(file)
+                    elif Path(file).suffix.lower() == '.pdf':
+                        text, metadata = parse_pdf(file)
+                    else:
+                        continue
+
+                    self.list_widget.addItem(f"    Parsed {len(text)} characters")
+                    self.list_widget.addItem(f"    Title: {metadata.title}, Author: {metadata.author}")
+                    self.list_widget.addItem("    Summarizing... (this may take a while)")
+
+                    # Start summarization worker
+                    worker = SummarizationWorker(file, text, metadata)
+                    worker.finished.connect(self.on_summarization_finished)
+                    worker.error.connect(self.on_summarization_error)
+                    self.workers.append(worker)  # Keep reference
+                    worker.start()
+
+                except ValueError as e:
+                    self.list_widget.addItem(f"    Error: {e}")
         else:
             self.list_widget.addItem("No valid book files found")
 
         if invalid_files:
             invalid_names = [Path(f).name for f in invalid_files]
             self._show_error_message(f"The following files are not supported: {', '.join(invalid_names)}. Only EPUB and PDF files are accepted.")
+
+    def on_summarization_finished(self, file_path: str, message: str):
+        """Handle successful summarization."""
+        self.list_widget.addItem(f"  ✓ {message}")
+
+    def on_summarization_error(self, file_path: str, error_message: str):
+        """Handle summarization error."""
+        self.list_widget.addItem(f"  ✗ {error_message}")
 
     def _is_valid_book_file(self, file_path: str) -> bool:
         """Check if the file is a valid book format (epub or pdf)."""

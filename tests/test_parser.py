@@ -72,10 +72,13 @@ class TestParseEpub:
             'get_content': lambda self: b'<p>Hello world</p>'
         })()
         mock_book.get_items.return_value = [mock_item]
+        mock_book.get_metadata.return_value = []  # No metadata
 
         with patch('pathlib.Path.exists', return_value=True):
-            result = parse_epub("test.epub")
-            assert "Hello world" in result
+            text, metadata = parse_epub("test.epub")
+            assert "Hello world" in text
+            assert metadata.title == "test"  # from Path.stem
+            assert metadata.author == "Unknown"
 
 
 class TestParsePdf:
@@ -109,5 +112,7 @@ class TestParsePdf:
         mock_reader.return_value.pages = [mock_page]
 
         with patch('pathlib.Path.exists', return_value=True):
-            result = parse_pdf("test.pdf")
-            assert "Hello world" in result
+            text, metadata = parse_pdf("test.pdf")
+            assert "Hello world" in text
+            assert metadata.title == "test"  # from Path.stem
+            assert metadata.author == "Unknown"

@@ -1,6 +1,7 @@
 """AI summarization service using Hugging Face transformers."""
 
 import logging
+import threading
 from transformers import AutoTokenizer, pipeline
 
 
@@ -10,24 +11,27 @@ MAX_MODEL_TOKENS = 1024
 # Global instances for reuse
 _summarizer = None
 _tokenizer = None
+_model_lock = threading.Lock()
 
 
 def get_summarizer():
     """Get or create the summarization pipeline."""
     global _summarizer
-    if _summarizer is None:
-        try:
-            _summarizer = pipeline("summarization", model=MODEL)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load summarization model: {e}")
+    with _model_lock:
+        if _summarizer is None:
+            try:
+                _summarizer = pipeline("summarization", model=MODEL)
+            except Exception as e:
+                raise RuntimeError(f"Failed to load summarization model: {e}")
     return _summarizer
 
 
 def get_tokenizer():
     """Get or create the tokenizer."""
     global _tokenizer
-    if _tokenizer is None:
-        _tokenizer = AutoTokenizer.from_pretrained(MODEL)
+    with _model_lock:
+        if _tokenizer is None:
+            _tokenizer = AutoTokenizer.from_pretrained(MODEL)
     return _tokenizer
 
 

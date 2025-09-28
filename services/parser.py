@@ -3,8 +3,19 @@
 from pathlib import Path
 import ebooklib
 import re
+from datetime import datetime
+from dataclasses import dataclass
 from ebooklib import epub
 from pypdf import PdfReader
+
+
+@dataclass
+class BookMetadata:
+    """Metadata for a book."""
+    title: str
+    author: str
+    path: str
+    timestamp: str
 
 
 def clean_extracted_text(text: str) -> str:
@@ -46,14 +57,14 @@ def clean_extracted_text(text: str) -> str:
     return '\n\n'.join(cleaned_paragraphs)
 
 
-def parse_epub(file_path: str) -> str:
-    """Parse an EPUB file and extract text content.
+def parse_epub(file_path: str) -> tuple[str, BookMetadata]:
+    """Parse an EPUB file and extract text content and metadata.
 
     Args:
         file_path: Path to the EPUB file.
 
     Returns:
-        Extracted text content from the book.
+        Tuple of (extracted text content, book metadata).
 
     Raises:
         ValueError: If the file cannot be parsed as EPUB.
@@ -66,6 +77,13 @@ def parse_epub(file_path: str) -> str:
         book = epub.read_epub(file_path)
     except Exception as e:
         raise ValueError(f"Failed to parse EPUB file: {e}")
+
+    # Extract metadata
+    title = book.get_metadata('DC', 'title')
+    title = title[0][0] if title else Path(file_path).stem
+    author = book.get_metadata('DC', 'creator')
+    author = author[0][0] if author else 'Unknown'
+    timestamp = datetime.now().isoformat()
 
     text_content = []
 
@@ -82,17 +100,19 @@ def parse_epub(file_path: str) -> str:
                 text_content.append(cleaned_content)
 
     raw_text = '\n\n'.join(text_content)
-    return clean_extracted_text(raw_text)
+    text = clean_extracted_text(raw_text)
+    metadata = BookMetadata(title=title, author=author, path=file_path, timestamp=timestamp)
+    return text, metadata
 
 
-def parse_pdf(file_path: str) -> str:
-    """Parse a PDF file and extract text content.
+def parse_pdf(file_path: str) -> tuple[str, BookMetadata]:
+    """Parse a PDF file and extract text content and metadata.
 
     Args:
         file_path: Path to the PDF file.
 
     Returns:
-        Extracted text content from the PDF.
+        Tuple of (extracted text content, book metadata).
 
     Raises:
         ValueError: If the file cannot be parsed as PDF.
@@ -105,6 +125,11 @@ def parse_pdf(file_path: str) -> str:
         reader = PdfReader(file_path)
     except Exception as e:
         raise ValueError(f"Failed to parse PDF file: {e}")
+
+    # Extract metadata
+    title = Path(file_path).stem  # Use filename as title
+    author = 'Unknown'  # PDFs don't have reliable author metadata
+    timestamp = datetime.now().isoformat()
 
     text_content = []
 
@@ -122,4 +147,6 @@ def parse_pdf(file_path: str) -> str:
         # For now, raise an error indicating OCR is needed
         raise ValueError("No text found in PDF. This appears to be a scanned document requiring OCR, which is not yet implemented.")
 
-    return clean_extracted_text(extracted_text)
+    text = clean_extracted_text(extracted_text)
+    metadata = BookMetadata(title=title, author=author, path=file_path, timestamp=timestamp)
+    return text, metadata
