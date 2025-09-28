@@ -3,10 +3,11 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget, QTabWidget, QScrollArea, QLabel, QFrame
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ui.drop_zone import DropZone
+from ui.summary_panel import SummaryPanel
 from services.parser import parse_epub, parse_pdf, BookMetadata
 from services import summarizer, storage
 
@@ -96,7 +97,7 @@ class MainWindow(QMainWindow):
     """Main application window for the Brief book summarization app."""
 
     def __init__(self) -> None:
-        """Initialize the main window with title, geometry, and welcome list widget."""
+        """Initialize the main window with title, geometry, and tabbed interface."""
         super().__init__()
         self.setWindowTitle(WINDOW_TITLE)
         self.setGeometry(WINDOW_X, WINDOW_Y, WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -108,10 +109,25 @@ class MainWindow(QMainWindow):
         # Track list item row per file
         self.file_rows = {}
 
-        # Create central widget and layout
+        # Create central widget with tab widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
+
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        layout.addWidget(self.tab_widget)
+
+        # Create processing tab
+        self._create_processing_tab()
+
+        # Create summaries tab
+        self._create_summaries_tab()
+
+    def _create_processing_tab(self):
+        """Create the file processing tab."""
+        processing_widget = QWidget()
+        layout = QVBoxLayout(processing_widget)
 
         # Create list widget for displaying files
         self.list_widget = QListWidget()
@@ -127,6 +143,63 @@ class MainWindow(QMainWindow):
         self.drop_zone = DropZone()
         layout.addWidget(self.drop_zone)
         self.drop_zone.filesDropped.connect(self.process_files)
+
+        self.tab_widget.addTab(processing_widget, "Process Files")
+
+    def _create_summaries_tab(self):
+        """Create the summaries viewing tab."""
+        summaries_widget = QWidget()
+        layout = QVBoxLayout(summaries_widget)
+
+        # Create scroll area for summaries
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        layout.addWidget(scroll_area)
+
+        # Create container for summary panels
+        self.summaries_container = QWidget()
+        self.summaries_layout = QVBoxLayout(self.summaries_container)
+        scroll_area.setWidget(self.summaries_container)
+
+        # Add refresh button
+        refresh_button = QPushButton("Refresh Summaries")
+        refresh_button.clicked.connect(self.refresh_summaries)
+        layout.addWidget(refresh_button)
+
+        self.tab_widget.addTab(summaries_widget, "View Summaries")
+
+        # Load summaries initially
+        self.refresh_summaries()
+
+    def refresh_summaries(self):
+        """Refresh the summaries display by loading all stored summaries."""
+        # Clear existing summaries
+        while self.summaries_layout.count() > 0:
+            item = self.summaries_layout.takeAt(0)
+            widget = item.widget() if item else None
+            if widget:
+                widget.deleteLater()
+
+        # Load all summaries from storage
+        try:
+            from services.storage import list_summaries
+
+            summaries = list_summaries()
+            if not summaries:
+                no_summaries_label = QLabel("No summaries found. Process some books first!")
+                no_summaries_label.setStyleSheet("color: gray; font-style: italic;")
+                self.summaries_layout.addWidget(no_summaries_label)
+                return
+
+            for summary_data in summaries:
+                # Create a panel for each summary
+                panel = SummaryPanel(summary_data)
+                self.summaries_layout.addWidget(panel)
+
+        except Exception as e:
+            error_label = QLabel(f"Error loading summaries: {str(e)}")
+            error_label.setStyleSheet("color: red;")
+            self.summaries_layout.addWidget(error_label)
 
     def process_files(self, file_paths: list[str]) -> None:
         """Process dropped files."""

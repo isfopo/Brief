@@ -110,6 +110,32 @@ def load_summary(book_path: str) -> Optional[SummaryData]:
         return None
 
 
+def list_summaries() -> list[SummaryData]:
+    """List all stored summaries.
+
+    Returns:
+        List of all SummaryData objects
+    """
+    summaries = []
+    if not STORAGE_DIR.exists():
+        return summaries
+
+    for summary_file in STORAGE_DIR.glob("*.summary.json.gz"):
+        try:
+            # Extract book path from hash (reverse lookup)
+            # Since we can't reverse the hash, we'll load each file
+            # and use the path from the metadata
+            with gzip.open(summary_file, 'rt', encoding='utf-8') as f:
+                json_str = f.read()
+            data_dict = json.loads(json_str)
+            data = SummaryData(**data_dict)
+            summaries.append(data)
+        except Exception as e:
+            logging.warning(f"Failed to load summary from {summary_file}: {e}")
+
+    return summaries
+
+
 def clear_cache(book_path: Optional[str] = None) -> None:
     """Clear cache entries.
 
