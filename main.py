@@ -50,10 +50,10 @@ class SummarizationWorker(QThread):
 
 # Constants
 WINDOW_TITLE = "Brief"
-WINDOW_X = 100
-WINDOW_Y = 100
-WINDOW_WIDTH = 400
-WINDOW_HEIGHT = 300
+WINDOW_X = 200
+WINDOW_Y = 200
+WINDOW_WIDTH = 1600
+WINDOW_HEIGHT = 1200
 WELCOME_TEXT = "Welcome to Brief!"
 
 
