@@ -93,7 +93,7 @@ def summarize_text(text: str, max_length: int = 15000, min_length: int = 1000) -
     Returns:
         The summarized text
     """
-    logging.info(f"Summarize: Starting summarization of {len(text)} characters, target length: {min_length}-{max_length}")
+    logging.info(f"Summarize: Starting summarization of {len(text)} characters, requested length: {min_length}-{max_length}")
 
     if not text.strip():
         logging.info("Summarize: Empty text provided, returning empty summary")
@@ -110,24 +110,49 @@ def summarize_text(text: str, max_length: int = 15000, min_length: int = 1000) -
         text = tokenizer.decode(tokens)
         logging.info(f"Summarize: Truncated text now has {len(text)} characters")
 
-    # Adjust max_length based on input length to avoid unnecessary long outputs
+    # Adjust max_length and min_length based on input length to avoid constraint violations
     input_tokens = len(tokenizer.encode(text))  # Recalculate after potential truncation
-    # Target summary length: 1/3 of input tokens, but cap at reasonable maximum
-    suggested_max = min(max(input_tokens // 3, min_length + 20), 250)
+
+    # For very short inputs, don't try to summarize
+    if input_tokens <= 10:
+        logging.info(f"Summarize: Input too short ({input_tokens} tokens), returning as-is")
+        return text
+
+    # Target summary length: 1/2 of input tokens for short texts, 1/3 for longer texts
+    if input_tokens < 50:
+        suggested_max = max(input_tokens // 2, min_length + 10)
+    else:
+        suggested_max = max(input_tokens // 3, min_length + 20)
+
+    # Cap at reasonable maximum
+    suggested_max = min(suggested_max, 250)
     # Use the smaller of provided max_length and suggested max
     effective_max_length = min(max_length, suggested_max)
-    if effective_max_length < max_length:
-        logging.info(f"Summarize: Adjusted max_length from {max_length} to {effective_max_length} for {input_tokens} input tokens")
+
+    # Ensure min_length is feasible (at least 5 less than max_length, but not less than 5)
+    effective_min_length = min(min_length, max(5, effective_max_length - 5))
+
+    if effective_max_length < max_length or effective_min_length < min_length:
+        logging.info(f"Summarize: Adjusted lengths - max_length: {max_length}->{effective_max_length}, min_length: {min_length}->{effective_min_length} for {input_tokens} input tokens")
 
     logging.info("Summarize: Getting summarizer model")
     summarizer = get_summarizer()
 
     try:
-        logging.info(f"Summarize: Running model with max_length={effective_max_length}, min_length={min_length}")
+        logging.info(f"Summarize: Running model with max_length={effective_max_length}, min_length={effective_min_length}")
         start_time = __import__('time').time()
-        summary = summarizer(text, max_length=effective_max_length, min_length=min_length, do_sample=False)
-        end_time = __import__('time').time()
+
+        # For very short inputs, use minimal constraints
+        if input_tokens < 10:
+            safe_min_length = 1
+            safe_max_length = min(effective_max_length, 10)
+        else:
+            safe_min_length = max(1, min(effective_min_length, effective_max_length - 1))
+            safe_max_length = effective_max_length
+
+        summary = summarizer(text, max_length=safe_max_length, min_length=safe_min_length, do_sample=False)
         summary_text = summary[0]['summary_text']
+        end_time = __import__('time').time()
         logging.info(f"Summarize: Model completed in {end_time - start_time:.2f} seconds")
         logging.info(f"Summarize: Generated summary of {len(summary_text)} characters")
         return summary_text
