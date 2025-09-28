@@ -1,5 +1,7 @@
 import sys
+import logging
 from pathlib import Path
+from datetime import datetime
 
 from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -7,6 +9,35 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from ui.drop_zone import DropZone
 from services.parser import parse_epub, parse_pdf, BookMetadata
 from services import summarizer, storage
+
+# Configure logging
+logs_dir = Path("logs")
+logs_dir.mkdir(exist_ok=True)
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+log_file = logs_dir / f"log_{timestamp}.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(log_file)
+    ]
+)
+
+# Preload the summarization model in background
+import threading
+def preload_summarizer():
+    """Preload summarizer in background thread."""
+    try:
+        logging.info("Starting to preload summarization model...")
+        summarizer.preload_model()
+        logging.info("Summarization model preloaded successfully.")
+    except Exception as e:
+        logging.warning(f"Failed to preload summarizer: {e}")
+
+preload_thread = threading.Thread(target=preload_summarizer, daemon=True)
+preload_thread.start()
 
 
 class SummarizationWorker(QThread):
@@ -24,6 +55,7 @@ class SummarizationWorker(QThread):
 
     def run(self):
         try:
+            logging.info(f"Starting summarization for {Path(self.file_path).name}")
             self.progress.emit(self.file_path, "Starting summarization...")
 
             # Summarize the text
@@ -31,6 +63,7 @@ class SummarizationWorker(QThread):
             if not summary:
                 raise ValueError("Summarization failed: empty summary")
 
+            logging.info(f"Summarization complete for {Path(self.file_path).name}")
             self.progress.emit(self.file_path, "Summarization complete, saving...")
 
             # Save the summary
@@ -42,9 +75,11 @@ class SummarizationWorker(QThread):
             }
             storage.save_summary(metadata_dict, summary)
 
+            logging.info(f"Summary saved for {self.metadata.title}")
             self.finished.emit(self.file_path, f"Summarized and saved: {self.metadata.title}")
 
         except Exception as e:
+            logging.error(f"Error processing {Path(self.file_path).name}: {str(e)}")
             self.error.emit(self.file_path, f"Error processing {Path(self.file_path).name}: {str(e)}")
 
 
@@ -95,6 +130,7 @@ class MainWindow(QMainWindow):
 
     def process_files(self, file_paths: list[str]) -> None:
         """Process dropped files."""
+        logging.info(f"Processing {len(file_paths)} dropped files")
         valid_files = [path for path in file_paths if self._is_valid_book_file(path)]
         invalid_files = [path for path in file_paths if not self._is_valid_book_file(path)]
 
@@ -102,6 +138,7 @@ class MainWindow(QMainWindow):
         self.file_status.clear()
         self.file_rows.clear()
         if valid_files:
+            logging.info(f"Found {len(valid_files)} valid book files")
             self.list_widget.addItem("Processing files:")
             for file in valid_files:
                 row = self.list_widget.count()
@@ -111,6 +148,7 @@ class MainWindow(QMainWindow):
 
                 # Parse book files
                 try:
+                    logging.info(f"Parsing {Path(file).name}")
                     if Path(file).suffix.lower() == '.epub':
                         text, metadata = parse_epub(file)
                     elif Path(file).suffix.lower() == '.pdf':
@@ -118,6 +156,7 @@ class MainWindow(QMainWindow):
                     else:
                         continue
 
+                    logging.info(f"Parsed {Path(file).name}: {len(text)} characters, Title: {metadata.title}")
                     self._update_file_status(file, f"Parsed {len(text)} characters - Title: {metadata.title}, Author: {metadata.author}")
 
                     # Start summarization worker
@@ -129,12 +168,15 @@ class MainWindow(QMainWindow):
                     worker.start()
 
                 except ValueError as e:
+                    logging.error(f"Error parsing {Path(file).name}: {e}")
                     self._update_file_status(file, f"Error: {e}")
         else:
+            logging.info("No valid book files found")
             self.list_widget.addItem("No valid book files found")
 
         if invalid_files:
             invalid_names = [Path(f).name for f in invalid_files]
+            logging.warning(f"Unsupported files: {', '.join(invalid_names)}")
             self._show_error_message(f"The following files are not supported: {', '.join(invalid_names)}. Only EPUB and PDF files are accepted.")
 
     def on_summarization_finished(self, file_path: str, message: str):

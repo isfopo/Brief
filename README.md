@@ -30,6 +30,33 @@ Brief is a desktop application that distills non-fiction books (epub and PDF for
 - Drag and drop a book file.
 - View the generated summary in the library.
 
+## Troubleshooting
+
+### Slow Startup or Hanging on Summarization
+
+The app uses a large AI model (`facebook/bart-large-cnn`) for summarization. If startup is slow or summarization hangs:
+
+1. **Model Pre-downloading**: The setup script automatically downloads the model. If you skipped this, run:
+   ```bash
+   source env/bin/activate
+   python -c "from services.summarizer import preload_model; preload_model()"
+   ```
+
+2. **Force CPU Usage**: The app is configured to use CPU only to avoid GPU issues. If you still experience problems, you can use a smaller model for testing:
+   ```bash
+   USE_SMALL_MODEL=true python main.py
+   ```
+
+3. **Environment Variables**:
+   - `SUMMARIZER_MODEL`: Override the default model (default: `facebook/bart-large-cnn`)
+   - `USE_SMALL_MODEL`: Use smaller model for testing (default: `false`)
+   - `MAX_MODEL_TOKENS`: Maximum tokens per chunk (default: `1024`)
+
+4. **Common Issues**:
+   - **MPS/GPU Issues**: On macOS, MPS acceleration can cause slowdowns. The app forces CPU usage.
+   - **Network Issues**: Model downloads require internet. Ensure stable connection during setup.
+   - **Memory Issues**: Large books require significant RAM. Monitor system resources.
+
 ## Contributing
 
 See issues for epics and tasks. Use the develop branch for PRs.

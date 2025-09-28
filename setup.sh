@@ -18,4 +18,18 @@ source env/bin/activate
 pip install -r requirements.txt
 
 echo "Dependencies installed."
+
+echo "Pre-downloading summarization model (this may take a few minutes)..."
+python -c "
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = ''
+import torch
+torch.set_default_device('cpu')
+from services.summarizer import preload_model
+if preload_model():
+    print('Model pre-downloaded successfully')
+else:
+    print('Warning: Model pre-download failed')
+"
+
 echo "Setup complete. Activate the environment with 'source env/bin/activate'"

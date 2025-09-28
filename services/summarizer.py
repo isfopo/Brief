@@ -2,11 +2,23 @@
 
 import logging
 import threading
+import os
+import torch
 from transformers import AutoTokenizer, pipeline
 
 
-MODEL = "facebook/bart-large-cnn"
-MAX_MODEL_TOKENS = 1024
+# Configuration - can be overridden via environment variables
+MODEL = os.getenv("SUMMARIZER_MODEL", "facebook/bart-large-cnn")
+MAX_MODEL_TOKENS = int(os.getenv("MAX_MODEL_TOKENS", "1024"))
+USE_SMALL_MODEL = os.getenv("USE_SMALL_MODEL", "false").lower() == "true"
+
+# Use smaller model for testing if requested
+if USE_SMALL_MODEL:
+    MODEL = "sshleifer/distilbart-cnn-6-6"
+
+# Force CPU usage to avoid MPS/GPU issues
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
+torch.set_default_device('cpu')
 
 # Global instances for reuse
 _summarizer = None
@@ -20,8 +32,13 @@ def get_summarizer():
     with _model_lock:
         if _summarizer is None:
             try:
-                _summarizer = pipeline("summarization", model=MODEL)
+                logging.info(f"Loading summarization model: {MODEL}")
+                start_time = __import__('time').time()
+                _summarizer = pipeline("summarization", model=MODEL, device='cpu')
+                load_time = __import__('time').time() - start_time
+                logging.info(f"Model loaded successfully in {load_time:.2f} seconds")
             except Exception as e:
+                logging.error(f"Failed to load summarization model: {e}")
                 raise RuntimeError(f"Failed to load summarization model: {e}")
     return _summarizer
 
@@ -31,8 +48,38 @@ def get_tokenizer():
     global _tokenizer
     with _model_lock:
         if _tokenizer is None:
-            _tokenizer = AutoTokenizer.from_pretrained(MODEL)
+            try:
+                logging.info(f"Loading tokenizer: {MODEL}")
+                start_time = __import__('time').time()
+                _tokenizer = AutoTokenizer.from_pretrained(MODEL)
+                load_time = __import__('time').time() - start_time
+                logging.info(f"Tokenizer loaded successfully in {load_time:.2f} seconds")
+            except Exception as e:
+                logging.error(f"Failed to load tokenizer: {e}")
+                raise RuntimeError(f"Failed to load tokenizer: {e}")
     return _tokenizer
+
+
+def preload_model():
+    """Pre-download and cache the model and tokenizer.
+
+    Call this function early in the application startup to avoid
+    delays when summarization is first requested.
+    """
+    try:
+        logging.info("Preloading summarization model and tokenizer...")
+        start_time = __import__('time').time()
+
+        # Preload both model and tokenizer
+        get_summarizer()
+        get_tokenizer()
+
+        total_time = __import__('time').time() - start_time
+        logging.info(f"Model preloading completed in {total_time:.2f} seconds")
+        return True
+    except Exception as e:
+        logging.error(f"Failed to preload model: {e}")
+        return False
 
 
 def summarize_text(text: str, max_length: int = 150, min_length: int = 50) -> str:
@@ -115,7 +162,10 @@ def summarize_chunks(chunks: list[str], group_size: int = 5) -> str:
         Hierarchical summary of all chunks
     """
     if not chunks:
+        logging.info("No chunks provided")
         return ""
+
+    logging.info(f"Summarizing {len(chunks)} chunks")
 
     # Base case: if few chunks, summarize directly
     if len(chunks) <= group_size:
@@ -150,4 +200,5 @@ def summarize_book(text: str) -> str:
         Hierarchical summary of the book
     """
     chunks = chunk_text(text)
+    logging.info("Chunking complete")
     return summarize_chunks(chunks)

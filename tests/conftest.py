@@ -10,3 +10,10 @@ def qapp():
     app = QApplication([])
     yield app
     app.quit()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def preload_summarizer():
+    """Preload the summarizer model for tests."""
+    from services.summarizer import preload_model
+    preload_model()
