@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget, QTabWidget, QScrollArea, QLabel, QFrame, QHBoxLayout, QLineEdit, QComboBox
+from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget, QTabWidget, QScrollArea, QLabel, QFrame, QHBoxLayout, QLineEdit, QComboBox, QProgressBar
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ui.drop_zone import DropZone
@@ -46,7 +46,7 @@ class SummarizationWorker(QThread):
 
     finished = pyqtSignal(str, str)  # file_path, status_message
     error = pyqtSignal(str, str)     # file_path, error_message
-    progress = pyqtSignal(str, str)  # file_path, progress_message
+    progress = pyqtSignal(str, str, int)  # file_path, progress_message, percentage
 
     def __init__(self, file_path: str, text: str, metadata: BookMetadata):
         super().__init__()
@@ -54,18 +54,24 @@ class SummarizationWorker(QThread):
         self.text = text
         self.metadata = metadata
 
+    def _progress_callback(self, percentage: int):
+        """Progress callback for summarization."""
+        # Convert internal progress (0-95) to overall progress (10-90)
+        overall_progress = 10 + (percentage * 80 // 100)
+        self.progress.emit(self.file_path, f"Summarizing... {percentage}%", overall_progress)
+
     def run(self):
         try:
             logging.info(f"Starting summarization for {Path(self.file_path).name}")
-            self.progress.emit(self.file_path, "Starting summarization...")
+            self.progress.emit(self.file_path, "Starting summarization...", 0)
 
             # Summarize the text
-            summary = summarizer.summarize_book(self.text)
+            self.progress.emit(self.file_path, "Starting summarization...", 10)
+            summary = summarizer.summarize_book(self.text, progress_callback=self._progress_callback)
             if not summary:
                 raise ValueError("Summarization failed: empty summary")
 
-            logging.info(f"Summarization complete for {Path(self.file_path).name}")
-            self.progress.emit(self.file_path, "Summarization complete, saving...")
+            self.progress.emit(self.file_path, "Summarization complete, saving...", 90)
 
             # Save the summary
             metadata_dict = {
@@ -76,6 +82,7 @@ class SummarizationWorker(QThread):
             }
             storage.save_summary(metadata_dict, summary)
 
+            self.progress.emit(self.file_path, "Summary saved successfully", 100)
             logging.info(f"Summary saved for {self.metadata.title}")
             self.finished.emit(self.file_path, f"Summarized and saved: {self.metadata.title}")
 
@@ -133,6 +140,12 @@ class MainWindow(QMainWindow):
         self.list_widget = QListWidget()
         self.list_widget.addItem(WELCOME_TEXT)
         layout.addWidget(self.list_widget)
+
+        # Create progress bar for summarization
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)  # Hidden initially
+        self.progress_bar.setRange(0, 100)
+        layout.addWidget(self.progress_bar)
 
         # Create button for event handling demonstration
         self.button = QPushButton("Click me!")
@@ -373,6 +386,10 @@ class MainWindow(QMainWindow):
                     self.workers.append(worker)  # Keep reference
                     worker.start()
 
+                    # Show progress bar when summarization starts
+                    self.progress_bar.setVisible(True)
+                    self.progress_bar.setValue(0)
+
                 except ValueError as e:
                     logging.error(f"Error parsing {Path(file).name}: {e}")
                     self._update_file_status(file, f"Error: {e}")
@@ -388,14 +405,17 @@ class MainWindow(QMainWindow):
     def on_summarization_finished(self, file_path: str, message: str):
         """Handle successful summarization."""
         self._update_file_status(file_path, f"✓ {message}")
+        self.progress_bar.setVisible(False)
 
     def on_summarization_error(self, file_path: str, error_message: str):
         """Handle summarization error."""
         self._update_file_status(file_path, f"✗ {error_message}")
+        self.progress_bar.setVisible(False)
 
-    def on_summarization_progress(self, file_path: str, progress_message: str):
+    def on_summarization_progress(self, file_path: str, progress_message: str, percentage: int):
         """Handle summarization progress updates."""
         self._update_file_status(file_path, progress_message)
+        self.progress_bar.setValue(percentage)
 
     def _update_file_status(self, file_path: str, status: str):
         """Update the status for a file in the list widget."""

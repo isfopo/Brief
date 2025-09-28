@@ -177,7 +177,7 @@ def chunk_text(text: str, max_tokens: int = 900, min_tokens: int = 500) -> list[
     return chunks
 
 
-def summarize_chunks(chunks: list[str], group_size: int = 5) -> str:
+def summarize_chunks(chunks: list[str], group_size: int = 5, progress_callback=None) -> str:
     """Generate hierarchical summary from text chunks.
 
     Uses a recursive approach: summarize chunks in groups, then summarize
@@ -205,6 +205,9 @@ def summarize_chunks(chunks: list[str], group_size: int = 5) -> str:
         summaries = []
         for i, chunk in enumerate(valid_chunks):
             logging.info(f"SummarizeChunks: Summarizing chunk {i+1}/{len(valid_chunks)} ({len(chunk)} chars)")
+            if progress_callback:
+                progress = 25 + (i / len(valid_chunks)) * 40  # 25-65%
+                progress_callback(int(progress))
             summary = summarize_text(chunk)
             if summary:
                 summaries.append(summary)
@@ -216,8 +219,12 @@ def summarize_chunks(chunks: list[str], group_size: int = 5) -> str:
 
         combined = " ".join(summaries)
         logging.info(f"SummarizeChunks: Combining {len(summaries)} summaries ({len(combined)} chars total)")
+        if progress_callback:
+            progress_callback(70)
         final_summary = summarize_text(combined)
         logging.info(f"SummarizeChunks: Final summary: {len(final_summary)} chars")
+        if progress_callback:
+            progress_callback(80)
         return final_summary
 
     # Recursive case: group chunks and summarize hierarchically
@@ -229,6 +236,10 @@ def summarize_chunks(chunks: list[str], group_size: int = 5) -> str:
         group_num = group_idx // group_size + 1
         group = chunks[group_idx:group_idx + group_size]
         logging.info(f"SummarizeChunks: Processing group {group_num}/{total_groups} with {len(group)} chunks")
+
+        if progress_callback:
+            progress = 25 + (group_num / total_groups) * 50  # 25-75%
+            progress_callback(int(progress))
 
         valid_group_chunks = [chunk for chunk in group if chunk.strip()]
         logging.info(f"SummarizeChunks: Group {group_num} has {len(valid_group_chunks)} non-empty chunks")
@@ -248,33 +259,45 @@ def summarize_chunks(chunks: list[str], group_size: int = 5) -> str:
             logging.info(f"SummarizeChunks: Group {group_num} final summary: {len(group_summary)} chars")
 
     logging.info(f"SummarizeChunks: Generated {len(summaries)} group summaries, recursing")
+    if progress_callback:
+        progress_callback(85)
     # Recurse on the summaries
-    return summarize_chunks(summaries, group_size)
+    return summarize_chunks(summaries, group_size, progress_callback)
 
 
-def summarize_book(text: str) -> str:
+def summarize_book(text: str, progress_callback=None) -> str:
     """Summarize a full book text using chunking and hierarchical summarization.
 
     Args:
         text: The full text of the book
+        progress_callback: Optional callback function to report progress (percentage)
 
     Returns:
         Hierarchical summary of the book
     """
     logging.info(f"SummarizeBook: Starting book summarization of {len(text)} characters")
 
+    if progress_callback:
+        progress_callback(5)  # Starting
+
     start_time = __import__('time').time()
     chunks = chunk_text(text)
     chunk_time = __import__('time').time()
     logging.info(f"SummarizeBook: Chunking completed in {chunk_time - start_time:.2f} seconds, created {len(chunks)} chunks")
 
+    if progress_callback:
+        progress_callback(20)  # Chunking complete
+
     if not chunks:
         logging.warning("SummarizeBook: No chunks created, returning empty summary")
         return ""
 
-    summary = summarize_chunks(chunks)
+    summary = summarize_chunks(chunks, progress_callback=progress_callback)
     end_time = __import__('time').time()
     logging.info(f"SummarizeBook: Book summarization completed in {end_time - start_time:.2f} seconds")
     logging.info(f"SummarizeBook: Final summary length: {len(summary)} characters")
+
+    if progress_callback:
+        progress_callback(95)  # Summarization complete
 
     return summary
