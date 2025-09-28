@@ -123,28 +123,41 @@ def chunk_text(text: str, max_tokens: int = 900, min_tokens: int = 500) -> list[
         List of text chunks
     """
     if not text.strip():
+        logging.info("Chunking: Empty text provided")
         return []
 
+    logging.info(f"Chunking: Starting tokenization of {len(text)} characters")
     tokenizer = get_tokenizer()
     tokens = tokenizer.encode(text, add_special_tokens=False)
+    logging.info(f"Chunking: Encoded into {len(tokens)} tokens")
 
     chunks = []
     start = 0
+    chunk_num = 1
 
     while start < len(tokens):
+        logging.info(f"Chunking: Creating chunk {chunk_num}, starting at token {start}")
+
         # Try to take up to max_tokens
         end = min(start + max_tokens, len(tokens))
+        logging.info(f"Chunking: Initial end position: {end}")
 
         # If the chunk would be too small and we're not at the end, extend it
         if end - start < min_tokens and end < len(tokens):
+            old_end = end
             end = min(start + min_tokens, len(tokens))
+            logging.info(f"Chunking: Extended chunk from {old_end} to {end} to meet min_tokens")
 
         chunk_tokens = tokens[start:end]
         chunk_text = tokenizer.decode(chunk_tokens, skip_special_tokens=True)
         chunks.append(chunk_text)
 
-        start = end
+        logging.info(f"Chunking: Created chunk {chunk_num} with {len(chunk_tokens)} tokens ({len(chunk_text)} chars)")
 
+        start = end
+        chunk_num += 1
+
+    logging.info(f"Chunking: Completed, created {len(chunks)} chunks")
     return chunks
 
 
