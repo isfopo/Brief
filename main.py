@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget, QTabWidget, QScrollArea, QLabel, QFrame, QHBoxLayout, QLineEdit
+from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget, QTabWidget, QScrollArea, QLabel, QFrame, QHBoxLayout, QLineEdit, QComboBox
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ui.drop_zone import DropZone
@@ -164,17 +164,28 @@ class MainWindow(QMainWindow):
         # Add search and control buttons
         controls_layout = QVBoxLayout()
 
-        # Search bar
-        search_layout = QHBoxLayout()
+        # Search and sort controls
+        search_sort_layout = QHBoxLayout()
+
+        # Search
         search_label = QLabel("Search:")
-        search_layout.addWidget(search_label)
+        search_sort_layout.addWidget(search_label)
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search by title, author, or content...")
         self.search_input.textChanged.connect(self.filter_summaries)
-        search_layout.addWidget(self.search_input)
+        search_sort_layout.addWidget(self.search_input)
 
-        controls_layout.addLayout(search_layout)
+        # Sort
+        sort_label = QLabel("Sort by:")
+        search_sort_layout.addWidget(sort_label)
+
+        self.sort_combo = QComboBox()
+        self.sort_combo.addItems(["Date (newest first)", "Date (oldest first)", "Title (A-Z)", "Title (Z-A)", "Author (A-Z)", "Author (Z-A)"])
+        self.sort_combo.currentTextChanged.connect(self.sort_summaries)
+        search_sort_layout.addWidget(self.sort_combo)
+
+        controls_layout.addLayout(search_sort_layout)
 
         # Control buttons
         buttons_layout = QHBoxLayout()
@@ -242,6 +253,35 @@ class MainWindow(QMainWindow):
             panel = SummaryPanel(summary_data)
             self.summaries_layout.addWidget(panel)
         self.load_more_button.setVisible(False)
+
+    def sort_summaries(self):
+        """Sort summaries based on selected criteria."""
+        if not self.all_summaries:
+            return
+
+        sort_option = self.sort_combo.currentText()
+
+        if sort_option == "Date (newest first)":
+            self.all_summaries.sort(key=lambda s: s.timestamp, reverse=True)
+        elif sort_option == "Date (oldest first)":
+            self.all_summaries.sort(key=lambda s: s.timestamp)
+        elif sort_option == "Title (A-Z)":
+            self.all_summaries.sort(key=lambda s: s.title.lower())
+        elif sort_option == "Title (Z-A)":
+            self.all_summaries.sort(key=lambda s: s.title.lower(), reverse=True)
+        elif sort_option == "Author (A-Z)":
+            self.all_summaries.sort(key=lambda s: s.author.lower())
+        elif sort_option == "Author (Z-A)":
+            self.all_summaries.sort(key=lambda s: s.author.lower(), reverse=True)
+
+        # Re-display with new sorting
+        self.current_page = 0
+        while self.summaries_layout.count() > 0:
+            item = self.summaries_layout.takeAt(0)
+            widget = item.widget() if item else None
+            if widget:
+                widget.deleteLater()
+        self._display_summaries_page()
 
     def refresh_summaries(self):
         """Refresh the summaries display by reloading from storage."""
