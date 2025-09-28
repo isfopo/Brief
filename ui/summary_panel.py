@@ -1,7 +1,7 @@
 """Summary panel component for displaying book summaries."""
 
 from PyQt6.QtWidgets import QFrame, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QTextEdit
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSize
 from services.storage import SummaryData
 
 
@@ -75,7 +75,6 @@ class SummaryPanel(QFrame):
 
         # Summary text area
         self.summary_text = QTextEdit()
-        self.summary_text.setPlainText(self.summary_data.summary)
         self.summary_text.setReadOnly(True)
         self.summary_text.setStyleSheet("""
             QTextEdit {
@@ -137,19 +136,48 @@ class SummaryPanel(QFrame):
         """Update the text display based on expanded state."""
         if self.expanded:
             self.summary_text.setPlainText(self.summary_data.summary)
+            self.summary_text.setMaximumHeight(400)  # Allow scrolling for very long text
+            self.summary_text.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
             self.expand_button.setText("▲")
             self.view_full_button.setVisible(False)
         else:
-            # Show truncated text
+            # Show truncated text with smart truncation
             full_text = self.summary_data.summary
             if len(full_text) > 300:
-                truncated = full_text[:300] + "..."
+                # Try to truncate at sentence boundary
+                truncated = self._smart_truncate(full_text, 300)
                 self.summary_text.setPlainText(truncated)
                 self.view_full_button.setVisible(True)
             else:
                 self.summary_text.setPlainText(full_text)
                 self.view_full_button.setVisible(False)
+            self.summary_text.setMaximumHeight(100)  # Compact height when collapsed
+            self.summary_text.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             self.expand_button.setText("▼")
+
+    def _smart_truncate(self, text: str, max_length: int) -> str:
+        """Truncate text at sentence or word boundary."""
+        if len(text) <= max_length:
+            return text
+
+        # Try to truncate at sentence boundary
+        truncated = text[:max_length]
+        last_sentence_end = max(
+            truncated.rfind('. '),
+            truncated.rfind('! '),
+            truncated.rfind('? ')
+        )
+
+        if last_sentence_end > max_length * 0.7:  # If sentence end is reasonably close
+            return text[:last_sentence_end + 1] + "..."
+
+        # Try to truncate at word boundary
+        last_space = truncated.rfind(' ')
+        if last_space > max_length * 0.8:  # If space is reasonably close
+            return text[:last_space] + "..."
+
+        # Fallback to character truncation
+        return truncated + "..."
 
     def _toggle_expanded(self):
         """Toggle between expanded and collapsed view."""
