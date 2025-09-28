@@ -86,8 +86,6 @@ class SummaryPanel(QFrame):
             }
         """)
 
-        # Initially show truncated text
-        self._update_text_display()
         layout.addWidget(self.summary_text)
 
         # Action buttons
@@ -131,6 +129,9 @@ class SummaryPanel(QFrame):
         buttons_layout.addWidget(delete_button)
 
         layout.addLayout(buttons_layout)
+
+        # Initially show truncated text (after all UI elements are created)
+        self._update_text_display()
 
     def _update_text_display(self):
         """Update the text display based on expanded state."""
