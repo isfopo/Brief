@@ -2,10 +2,9 @@
 
 import pytest
 import json
-import gzip
 from pathlib import Path
 from unittest.mock import patch, mock_open
-from services.storage import get_file_path, save_summary, load_summary, SummaryData, STORAGE_DIR
+from services.storage import get_file_path, save_summary, load_summary, SummaryData
 
 
 class TestGetFilePath:
@@ -86,6 +85,14 @@ class TestLoadSummary:
         assert result.title == "Test Book"
         assert result.summary == "Test summary"
 
+    @patch('services.storage._cache', {'/path/to/book.epub': SummaryData(title="Cached", author="Author", path="/path/to/book.epub", timestamp="2023-01-01T00:00:00Z", summary="Cached summary")})
+    def test_load_summary_cache_hit(self):
+        """Test returning cached data without file access."""
+        result = load_summary("/path/to/book.epub")
+        assert isinstance(result, SummaryData)
+        assert result.title == "Cached"
+        assert result.summary == "Cached summary"
+
     @patch('services.storage._cache', {})
     @patch('services.storage.STORAGE_DIR', Path('/tmp/test_storage'))
     @patch('pathlib.Path.exists', return_value=True)
@@ -94,6 +101,12 @@ class TestLoadSummary:
         """Test handling of corrupted files."""
         result = load_summary("/path/to/book.epub")
         assert result is None
+
+    def test_load_summary_invalid_input(self):
+        """Test handling of invalid input."""
+        assert load_summary("") is None
+        assert load_summary(None) is None  # type: ignore
+        assert load_summary(123) is None  # type: ignore
 
     @patch('services.storage._cache', {})
     @patch('services.storage.STORAGE_DIR', Path('/tmp/test_storage'))

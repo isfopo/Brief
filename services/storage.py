@@ -4,6 +4,7 @@ import hashlib
 import json
 import gzip
 import logging
+import threading
 from pathlib import Path
 from dataclasses import dataclass, asdict
 from typing import Optional
@@ -11,8 +12,10 @@ from typing import Optional
 # Storage directory in user's home
 STORAGE_DIR = Path.home() / ".brief" / "summaries"
 
-# Global cache for loaded summaries
+# Global cache for loaded summaries (simple LRU with max size)
+MAX_CACHE_SIZE = 100
 _cache = {}
+_cache_lock = threading.Lock()
 
 @dataclass
 class SummaryData:
@@ -78,8 +81,12 @@ def load_summary(book_path: str) -> Optional[SummaryData]:
     Returns:
         SummaryData if found, None otherwise
     """
-    if book_path in _cache:
-        return _cache[book_path]
+    if not book_path or not isinstance(book_path, str):
+        return None
+
+    with _cache_lock:
+        if book_path in _cache:
+            return _cache[book_path]
 
     file_path = get_file_path(book_path)
     if not file_path.exists():
@@ -90,8 +97,27 @@ def load_summary(book_path: str) -> Optional[SummaryData]:
             json_str = f.read()
         data_dict = json.loads(json_str)
         data = SummaryData(**data_dict)
-        _cache[book_path] = data
+        with _cache_lock:
+            _cache[book_path] = data
+            # Simple LRU: if cache exceeds max size, remove oldest half
+            if len(_cache) > MAX_CACHE_SIZE:
+                keys_to_remove = list(_cache.keys())[:len(_cache) // 2]
+                for key in keys_to_remove:
+                    _cache.pop(key, None)
         return data
     except (OSError, json.JSONDecodeError, gzip.BadGzipFile, TypeError) as e:
         logging.error(f"Failed to load summary for {book_path}: {e}")
         return None
+
+
+def clear_cache(book_path: Optional[str] = None) -> None:
+    """Clear cache entries.
+
+    Args:
+        book_path: Specific path to clear, or None to clear all
+    """
+    with _cache_lock:
+        if book_path:
+            _cache.pop(book_path, None)
+        else:
+            _cache.clear()
