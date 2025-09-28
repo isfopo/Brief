@@ -9,7 +9,7 @@ from transformers import AutoTokenizer, pipeline
 
 # Configuration - can be overridden via environment variables
 MODEL = os.getenv("SUMMARIZER_MODEL", "facebook/bart-large-cnn")
-MAX_MODEL_TOKENS = int(os.getenv("MAX_MODEL_TOKENS", "1024"))
+MAX_MODEL_TOKENS = int(os.getenv("MAX_MODEL_TOKENS", "15000"))
 USE_SMALL_MODEL = os.getenv("USE_SMALL_MODEL", "false").lower() == "true"
 
 # Use smaller model for testing if requested
@@ -110,13 +110,22 @@ def summarize_text(text: str, max_length: int = 15000, min_length: int = 1000) -
         text = tokenizer.decode(tokens)
         logging.info(f"Summarize: Truncated text now has {len(text)} characters")
 
+    # Adjust max_length based on input length to avoid unnecessary long outputs
+    input_tokens = len(tokenizer.encode(text))  # Recalculate after potential truncation
+    # Target summary length: 1/3 of input tokens, but cap at reasonable maximum
+    suggested_max = min(max(input_tokens // 3, min_length + 20), 250)
+    # Use the smaller of provided max_length and suggested max
+    effective_max_length = min(max_length, suggested_max)
+    if effective_max_length < max_length:
+        logging.info(f"Summarize: Adjusted max_length from {max_length} to {effective_max_length} for {input_tokens} input tokens")
+
     logging.info("Summarize: Getting summarizer model")
     summarizer = get_summarizer()
 
     try:
-        logging.info(f"Summarize: Running model with max_length={max_length}, min_length={min_length}")
+        logging.info(f"Summarize: Running model with max_length={effective_max_length}, min_length={min_length}")
         start_time = __import__('time').time()
-        summary = summarizer(text, max_length=max_length, min_length=min_length, do_sample=False)
+        summary = summarizer(text, max_length=effective_max_length, min_length=min_length, do_sample=False)
         end_time = __import__('time').time()
         summary_text = summary[0]['summary_text']
         logging.info(f"Summarize: Model completed in {end_time - start_time:.2f} seconds")
