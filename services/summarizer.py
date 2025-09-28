@@ -82,7 +82,7 @@ def preload_model():
         return False
 
 
-def summarize_text(text: str, max_length: int = 150, min_length: int = 50) -> str:
+def summarize_text(text: str, max_length: int = 15000, min_length: int = 1000) -> str:
     """Summarize the given text using BART model.
 
     Args:
