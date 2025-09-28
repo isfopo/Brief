@@ -11,6 +11,9 @@ from typing import Optional
 # Storage directory in user's home
 STORAGE_DIR = Path.home() / ".brief" / "summaries"
 
+# Global cache for loaded summaries
+_cache = {}
+
 @dataclass
 class SummaryData:
     """Data structure for book summary storage."""
@@ -75,4 +78,20 @@ def load_summary(book_path: str) -> Optional[SummaryData]:
     Returns:
         SummaryData if found, None otherwise
     """
-    pass
+    if book_path in _cache:
+        return _cache[book_path]
+
+    file_path = get_file_path(book_path)
+    if not file_path.exists():
+        return None
+
+    try:
+        with gzip.open(file_path, 'rt', encoding='utf-8') as f:
+            json_str = f.read()
+        data_dict = json.loads(json_str)
+        data = SummaryData(**data_dict)
+        _cache[book_path] = data
+        return data
+    except (OSError, json.JSONDecodeError, gzip.BadGzipFile, TypeError) as e:
+        logging.error(f"Failed to load summary for {book_path}: {e}")
+        return None
