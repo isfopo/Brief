@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 
-from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget, QTabWidget, QScrollArea, QLabel, QFrame
+from PyQt6.QtWidgets import QApplication, QListWidget, QMainWindow, QMessageBox, QPushButton, QVBoxLayout, QWidget, QTabWidget, QScrollArea, QLabel, QFrame, QHBoxLayout, QLineEdit
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from ui.drop_zone import DropZone
@@ -161,18 +161,94 @@ class MainWindow(QMainWindow):
         self.summaries_layout = QVBoxLayout(self.summaries_container)
         scroll_area.setWidget(self.summaries_container)
 
-        # Add refresh button
-        refresh_button = QPushButton("Refresh Summaries")
-        refresh_button.clicked.connect(self.refresh_summaries)
-        layout.addWidget(refresh_button)
+        # Add search and control buttons
+        controls_layout = QVBoxLayout()
+
+        # Search bar
+        search_layout = QHBoxLayout()
+        search_label = QLabel("Search:")
+        search_layout.addWidget(search_label)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search by title, author, or content...")
+        self.search_input.textChanged.connect(self.filter_summaries)
+        search_layout.addWidget(self.search_input)
+
+        controls_layout.addLayout(search_layout)
+
+        # Control buttons
+        buttons_layout = QHBoxLayout()
+        self.refresh_button = QPushButton("Refresh Summaries")
+        self.refresh_button.clicked.connect(self.refresh_summaries)
+        buttons_layout.addWidget(self.refresh_button)
+
+        self.load_more_button = QPushButton("Load More")
+        self.load_more_button.clicked.connect(self.load_more_summaries)
+        self.load_more_button.setVisible(False)
+        buttons_layout.addWidget(self.load_more_button)
+
+        buttons_layout.addStretch()
+        controls_layout.addLayout(buttons_layout)
+
+        layout.addLayout(controls_layout)
 
         self.tab_widget.addTab(summaries_widget, "View Summaries")
+
+        # Initialize pagination
+        self.current_page = 0
+        self.page_size = 10
+        self.all_summaries = []
 
         # Load summaries initially
         self.refresh_summaries()
 
+    def load_more_summaries(self):
+        """Load the next page of summaries."""
+        self.current_page += 1
+        self._display_summaries_page()
+
+    def filter_summaries(self):
+        """Filter summaries based on search text."""
+        search_text = self.search_input.text().lower()
+        if not search_text:
+            # Show all summaries
+            self.refresh_summaries()
+            return
+
+        # Clear current display
+        while self.summaries_layout.count() > 0:
+            item = self.summaries_layout.takeAt(0)
+            widget = item.widget() if item else None
+            if widget:
+                widget.deleteLater()
+
+        # Filter and display matching summaries
+        filtered_summaries = []
+        for summary in self.all_summaries:
+            if (search_text in summary.title.lower() or
+                search_text in summary.author.lower() or
+                search_text in summary.summary.lower()):
+                filtered_summaries.append(summary)
+
+        if not filtered_summaries:
+            no_results_label = QLabel(f"No summaries found matching '{self.search_input.text()}'")
+            no_results_label.setStyleSheet("color: gray; font-style: italic;")
+            self.summaries_layout.addWidget(no_results_label)
+            self.load_more_button.setVisible(False)
+            return
+
+        # Display filtered results (no pagination for filtered results)
+        for summary_data in filtered_summaries:
+            panel = SummaryPanel(summary_data)
+            self.summaries_layout.addWidget(panel)
+        self.load_more_button.setVisible(False)
+
     def refresh_summaries(self):
-        """Refresh the summaries display by loading all stored summaries."""
+        """Refresh the summaries display by reloading from storage."""
+        # Reset pagination
+        self.current_page = 0
+        self.all_summaries = []
+
         # Clear existing summaries
         while self.summaries_layout.count() > 0:
             item = self.summaries_layout.takeAt(0)
@@ -184,22 +260,39 @@ class MainWindow(QMainWindow):
         try:
             from services.storage import list_summaries
 
-            summaries = list_summaries()
-            if not summaries:
+            self.all_summaries = list_summaries()
+            if not self.all_summaries:
                 no_summaries_label = QLabel("No summaries found. Process some books first!")
                 no_summaries_label.setStyleSheet("color: gray; font-style: italic;")
                 self.summaries_layout.addWidget(no_summaries_label)
+                self.load_more_button.setVisible(False)
                 return
 
-            for summary_data in summaries:
-                # Create a panel for each summary
-                panel = SummaryPanel(summary_data)
-                self.summaries_layout.addWidget(panel)
+            # Display first page
+            self._display_summaries_page()
 
         except Exception as e:
             error_label = QLabel(f"Error loading summaries: {str(e)}")
             error_label.setStyleSheet("color: red;")
             self.summaries_layout.addWidget(error_label)
+            self.load_more_button.setVisible(False)
+
+    def _display_summaries_page(self):
+        """Display the current page of summaries."""
+        if not self.all_summaries:
+            return
+
+        start_idx = self.current_page * self.page_size
+        end_idx = min(start_idx + self.page_size, len(self.all_summaries))
+
+        for i in range(start_idx, end_idx):
+            summary_data = self.all_summaries[i]
+            panel = SummaryPanel(summary_data)
+            self.summaries_layout.addWidget(panel)
+
+        # Show/hide load more button
+        has_more = end_idx < len(self.all_summaries)
+        self.load_more_button.setVisible(has_more)
 
     def process_files(self, file_paths: list[str]) -> None:
         """Process dropped files."""
